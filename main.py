@@ -2,120 +2,93 @@ from fastapi import FastAPI, Request
 from storage import ContextStore
 from engine import VeraEngine
 
-app = FastAPI(
-    title="Vera Bot",
-    version="1.0.0",
-    description="Merchant growth automation bot for Vera Challenge"
-)
+app = FastAPI()
 
 store = ContextStore()
 engine = VeraEngine(store)
 
 
-# Root Route (optional but useful)
 @app.get("/")
 async def root():
-    return {
-        "message": "Vera Bot is live",
-        "status": "running"
-    }
+    return {"message": "Vera Bot Live"}
 
 
-# Required Health Route
 @app.get("/v1/healthz")
 async def healthz():
-    return {
-        "status": "healthy"
-    }
+    return {"status": "healthy"}
 
 
-# Required Metadata Route
 @app.get("/v1/metadata")
 async def metadata():
     return {
         "bot_name": "Vera Bot",
-        "version": "1.0.0",
-        "owner": "Pagidi Kondala Bhavani",
+        "version": "10.0",
+        "author": "Bhavani",
         "capabilities": [
-            "merchant context processing",
-            "trigger campaign generation",
+            "merchant growth",
+            "deterministic decisions",
+            "category intelligence",
             "reply automation"
-        ],
-        "status": "live"
+        ]
     }
 
 
-# Required Context Route
 @app.post("/v1/context")
 async def context(request: Request):
-    try:
-        data = await request.json()
+    data = await request.json()
 
-        scope = data.get("scope")
-        context_id = data.get("context_id")
-        payload = data.get("payload", {})
+    scope = data.get("scope")
+    context_id = data.get("context_id")
+    payload = data.get("payload", {})
+    version = data.get("version", 1)
 
-        store.save(scope, context_id, payload)
+    store.save(scope, context_id, payload, version)
 
-        return {
-            "accepted": True,
-            "context_id": context_id
-        }
-
-    except Exception as e:
-        return {
-            "accepted": False,
-            "error": str(e)
-        }
+    return {
+        "accepted": True,
+        "ack_id": f"ack_{context_id}_{version}"
+    }
 
 
-# Required Tick Route
 @app.post("/v1/tick")
 async def tick(request: Request):
-    try:
-        data = await request.json()
+    data = await request.json()
 
-        merchant_id = data.get("merchant_id")
-        trigger = data.get("trigger", {})
+    merchant_id = data.get("merchant_id")
+    trigger = data.get("trigger", {})
+    customer = data.get("customer")
 
-        return engine.compose(merchant_id, trigger)
-
-    except Exception:
-        return {
-            "message": "Hi, shall I help grow your sales today?",
-            "cta": "Show me",
-            "send_as": "VERA",
-            "suppression_key": "safe_default"
-        }
+    return engine.compose(merchant_id, trigger, customer)
 
 
-# Required Reply Route
 @app.post("/v1/reply")
 async def reply(request: Request):
-    try:
-        data = await request.json()
+    data = await request.json()
 
-        msg = data.get("message", "").lower()
+    merchant_id = data.get("merchant_id", "unknown")
+    msg = data.get("message", "").lower()
 
-        if "yes" in msg or "do it" in msg or "launch" in msg:
-            return {
-                "message": "Great! Launching this campaign now.",
-                "cta": "View Results"
-            }
+    store.remember_reply(merchant_id, msg)
 
-        elif "no" in msg:
-            return {
-                "message": "No problem. Shall I suggest another idea?",
-                "cta": "Suggest Option"
-            }
-
+    if "yes" in msg or "do it" in msg or "launch" in msg:
         return {
-            "message": "Would you like me to improve today's sales?",
-            "cta": "Show Ideas"
+            "message": "Great. Launching this now.",
+            "cta": "View Results"
         }
 
-    except Exception:
+    if "no" in msg:
         return {
-            "message": "Reply received.",
-            "cta": "Continue"
+            "message": "No problem. Want a better offer instead?",
+            "cta": "Show Better Option"
         }
+
+    if "later" in msg:
+        return {
+            "message": "Understood. I'll remind you at a better time.",
+            "cta": "Okay"
+        }
+
+    return {
+        "message": "Would you like a better campaign idea?",
+        "cta": "Show Ideas"
+    }

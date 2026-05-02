@@ -13,36 +13,54 @@ class VeraEngine:
         owner = merchant.get("identity", {}).get("owner_name", "there")
         category = merchant.get("category", "").lower()
 
+        trigger_name = trigger.get("type", "opportunity")
+        trigger_reason = trigger.get("reason", "local demand")
+
+        key = f"{merchant_id}_{int(time.time())}"
+
         if category == "restaurant":
             return {
-                "message": f"Hi {owner}, orders are slow today. Shall I push your top combo to nearby customers?",
+                "message": f"Hi {owner}, {trigger_reason}. Shall I promote your best combo to nearby hungry customers today?",
                 "cta": "Launch Deal",
                 "send_as": "VERA",
-                "suppression_key": f"{merchant_id}_{int(time.time())}"
+                "suppression_key": key
             }
 
         elif category in ["salon", "spa"]:
             return {
-                "message": f"Hi {owner}, beauty searches are rising nearby. Shall I promote priority bookings today?",
+                "message": f"Hi {owner}, beauty demand is rising nearby. Shall I open priority bookings this afternoon?",
                 "cta": "Book Now",
                 "send_as": "VERA",
-                "suppression_key": f"{merchant_id}_{int(time.time())}"
+                "suppression_key": key
             }
 
         elif category == "dentist":
             return {
-                "message": f"Hi Dr. {owner}, checkup demand is increasing. Shall I promote appointments this week?",
+                "message": f"Hi Dr. {owner}, appointment interest is rising. Shall I promote checkups this week?",
                 "cta": "Yes, do it",
                 "send_as": "VERA",
-                "suppression_key": f"{merchant_id}_{int(time.time())}"
+                "suppression_key": key
             }
 
-        return self.default_response(merchant_id)
+        elif category == "gym":
+            return {
+                "message": f"Hi {owner}, fitness searches increased nearby. Shall I push trial memberships today?",
+                "cta": "Start Offer",
+                "send_as": "VERA",
+                "suppression_key": key
+            }
+
+        return {
+            "message": f"Hi {owner}, {trigger_reason}. Shall I help increase sales today?",
+            "cta": "Show Me",
+            "send_as": "VERA",
+            "suppression_key": key
+        }
 
     def default_response(self, merchant_id):
         return {
-            "message": "Hi, would you like to boost sales today?",
-            "cta": "Show me",
+            "message": "Hi, shall I help grow your business today?",
+            "cta": "Show Me",
             "send_as": "VERA",
             "suppression_key": f"default_{merchant_id}"
         }

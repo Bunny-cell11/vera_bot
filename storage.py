@@ -8,9 +8,9 @@ class ContextStore:
 
     def save(self, scope, context_id, payload, version=1):
         key = f"{scope}:{context_id}"
-        old_version = self.versions.get(key, 0)
+        old = self.versions.get(key, 0)
 
-        if version >= old_version:
+        if version >= old:
             self.versions[key] = version
 
             if scope == "merchant":
@@ -22,9 +22,6 @@ class ContextStore:
 
     def get_merchant(self, merchant_id):
         return self.merchants.get(merchant_id, {})
-
-    def get_customer(self, customer_id):
-        return self.customers.get(customer_id, {})
 
     def remember_reply(self, merchant_id, msg):
         self.history[merchant_id] = msg

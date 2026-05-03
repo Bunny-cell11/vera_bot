@@ -1,116 +1,55 @@
-from fastapi import FastAPI, Request
-from storage import ContextStore
-from engine import VeraEngine
-import re
+class VeraEngine:
+    def __init__(self, store):
+        self.store = store
 
-app = FastAPI()
+    def compose(self, merchant_id, trigger, customer=None):
+        merchant = self.store.get_merchant(merchant_id)
 
-store = ContextStore()
-engine = VeraEngine(store)
+        category = merchant.get("category", "business").lower()
+        owner = merchant.get("identity", {}).get("owner_name", "Partner")
 
+        trigger_type = trigger.get("type", "opportunity").lower()
 
-@app.get("/")
-async def root():
-    return {"message": "Vera Bot Live"}
+        top_offer = self.get_offer(category)
 
+        message = f"Hi {owner}, local demand is rising. Promote {top_offer} today?"
+        cta = "Promote Now"
 
-@app.get("/v1/healthz")
-async def healthz():
-    return {"status": "healthy"}
+        if trigger_type in ["dip", "revenue_dip", "slow"]:
+            message = f"Hi {owner}, sales dipped today. Recover with {top_offer} offer now?"
+            cta = "Recover Sales"
 
+        elif trigger_type in ["festival", "holiday"]:
+            message = f"Hi {owner}, festive demand is high. Launch {top_offer} tonight?"
+            cta = "Launch Offer"
 
-@app.get("/v1/metadata")
-async def metadata():
-    return {
-        "bot_name": "Vera Bot",
-        "version": "99.0",
-        "author": "Bhavani",
-        "capabilities": [
-            "merchant growth",
-            "trigger intelligence",
-            "reply automation",
-            "slot booking",
-            "anti loop",
-            "terminal intent detection"
-        ]
-    }
+        elif trigger_type in ["search_spike", "trend"]:
+            message = f"Hi {owner}, nearby searches increased. Promote {top_offer} now?"
+            cta = "Capture Demand"
 
-
-@app.post("/v1/context")
-async def context(request: Request):
-    data = await request.json()
-
-    store.save(
-        data.get("scope"),
-        data.get("context_id"),
-        data.get("payload", {}),
-        data.get("version", 1)
-    )
-
-    return {"accepted": True}
-
-
-@app.post("/v1/tick")
-async def tick(request: Request):
-    data = await request.json()
-
-    return engine.compose(
-        data.get("merchant_id"),
-        data.get("trigger", {}),
-        data.get("customer")
-    )
-
-
-@app.post("/v1/reply")
-async def reply(request: Request):
-    data = await request.json()
-
-    merchant_id = data.get("merchant_id", "unknown")
-    msg = data.get("message", "").lower().strip()
-
-    last = store.get_last_reply(merchant_id)
-
-    # STOP / terminal
-    if any(x in msg for x in [
-        "stop", "no", "not interested",
-        "unsubscribe", "leave me", "never"
-    ]):
-        return {"action": "end", "message": "Conversation ended."}
-
-    # duplicate loop prevention
-    if msg == last:
-        return {"action": "end", "message": "Closing repeated thread."}
-
-    # booking detection
-    if any(x in msg for x in [
-        "book", "schedule", "appointment",
-        "wed", "mon", "tue", "thu", "fri",
-        "am", "pm", ":"
-    ]):
-        store.remember_reply(merchant_id, msg)
-
-        slot = re.findall(r'(\d.*)', msg)
-        slot_text = slot[0] if slot else msg
+        elif trigger_type in ["regulation_change"]:
+            message = f"Hi {owner}, policy changes may create new demand. Promote {top_offer} now?"
+            cta = "Launch Campaign"
 
         return {
-            "action": "book",
-            "message": f"Booked successfully for {slot_text}"
+            "actions": [
+                {
+                    "action": "pitch",
+                    "message": message,
+                    "cta": cta,
+                    "send_as": "VERA"
+                }
+            ]
         }
 
-    # positive intent
-    if any(x in msg for x in [
-        "yes", "sure", "ok", "okay",
-        "launch", "start", "do it"
-    ]):
-        store.remember_reply(merchant_id, msg)
-        return {
-            "action": "launch",
-            "message": "Great. Launching this now."
+    def get_offer(self, category):
+        offers = {
+            "restaurant": "best seller combo",
+            "dentist": "checkup package",
+            "gym": "trial membership",
+            "salon": "beauty package",
+            "spa": "spa package",
+            "pharmacy": "quick refill service"
         }
 
-    store.remember_reply(merchant_id, msg)
-
-    return {
-        "action": "ask",
-        "message": "Would you like me to launch this now?"
-    }
+        return offers.get(category, "special offer")

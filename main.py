@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request
 from storage import ContextStore
 from engine import VeraEngine
+import re
 
 app = FastAPI()
 
@@ -22,14 +23,14 @@ async def healthz():
 async def metadata():
     return {
         "bot_name": "Vera Bot",
-        "version": "95.0",
+        "version": "100.0",
         "author": "Bhavani",
         "capabilities": [
             "merchant growth",
             "trigger intelligence",
             "reply automation",
+            "slot booking",
             "anti loop",
-            "booking handling",
             "terminal intent detection"
         ]
     }
@@ -39,28 +40,25 @@ async def metadata():
 async def context(request: Request):
     data = await request.json()
 
-    scope = data.get("scope")
-    context_id = data.get("context_id")
-    payload = data.get("payload", {})
-    version = data.get("version", 1)
+    store.save(
+        data.get("scope"),
+        data.get("context_id"),
+        data.get("payload", {}),
+        data.get("version", 1)
+    )
 
-    store.save(scope, context_id, payload, version)
-
-    return {
-        "accepted": True,
-        "ack_id": f"ack_{context_id}_{version}"
-    }
+    return {"accepted": True}
 
 
 @app.post("/v1/tick")
 async def tick(request: Request):
     data = await request.json()
 
-    merchant_id = data.get("merchant_id")
-    trigger = data.get("trigger", {})
-    customer = data.get("customer")
-
-    return engine.compose(merchant_id, trigger, customer)
+    return engine.compose(
+        data.get("merchant_id"),
+        data.get("trigger", {}),
+        data.get("customer")
+    )
 
 
 @app.post("/v1/reply")
@@ -72,42 +70,55 @@ async def reply(request: Request):
 
     last = store.get_last_reply(merchant_id)
 
-    # duplicate prevention
+    # duplicate protection
     if msg == last:
-        return {"action": "end", "message": "Closing repeated thread."}
+        return {
+            "action": "end",
+            "message": "Closing repeated thread."
+        }
 
-    # BOOKING FIRST
+    # booking first
     booking_words = [
         "book", "schedule", "appointment",
         "wed", "mon", "tue", "thu", "fri",
-        "sat", "sun", "am", "pm"
+        "sat", "sun", "am", "pm", ":"
     ]
 
     if any(word in msg for word in booking_words):
         store.remember_reply(merchant_id, msg)
+
+        slot = re.findall(r'(\d.*)', msg)
+        slot_text = slot[0] if slot else msg
+
         return {
             "action": "book",
-            "message": "Booked successfully. Confirmation shared."
+            "message": f"Booked successfully for {slot_text}"
         }
 
-    # STOP only exact no
-    if msg == "no" or any(word in msg for word in [
+    # stop / terminal
+    terminal_words = [
         "stop",
         "unsubscribe",
         "not interested",
-        "leave me"
-    ]):
+        "leave me",
+        "never"
+    ]
+
+    if msg == "no" or any(word in msg for word in terminal_words):
         return {
             "action": "end",
-            "message": "Understood. Conversation closed."
+            "message": "Conversation ended."
         }
 
     # positive
-    if any(word in msg for word in [
+    positive_words = [
         "yes", "sure", "ok", "okay",
         "launch", "start", "do it"
-    ]):
+    ]
+
+    if any(word in msg for word in positive_words):
         store.remember_reply(merchant_id, msg)
+
         return {
             "action": "launch",
             "message": "Great. Launching this now."
@@ -117,5 +128,5 @@ async def reply(request: Request):
 
     return {
         "action": "ask",
-        "message": "Would you like me to launch this offer now?"
+        "message": "Would you like me to launch this now?"
     }

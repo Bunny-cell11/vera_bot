@@ -68,39 +68,19 @@ async def reply(request: Request):
     data = await request.json()
 
     merchant_id = data.get("merchant_id", "unknown")
-    msg = data.get("message", "").strip().lower()
+    msg = data.get("message", "").lower().strip()
 
     last = store.get_last_reply(merchant_id)
 
-    # STOP / hostile / no
-    terminal_words = [
-        "stop", "unsubscribe", "leave me",
-        "not interested", "no thanks",
-        "don't message", "dont message",
-        "never", "no"
-    ]
-
-    if any(word in msg for word in terminal_words):
-        store.remember_reply(merchant_id, msg)
-        return {
-            "action": "end",
-            "message": "Understood. Conversation closed."
-        }
-
-    # prevent loops
+    # prevent duplicate loops
     if msg == last:
-        return {
-            "action": "end",
-            "message": "Closing duplicate conversation."
-        }
+        return {"action": "end", "message": "Closing repeated thread."}
 
-    # booking intent
+    # BOOKING FIRST (higher priority)
     booking_words = [
         "book", "schedule", "appointment",
-        "tomorrow", "today", "monday",
-        "tuesday", "wednesday", "thursday",
-        "friday", "saturday", "sunday",
-        "am", "pm"
+        "wed", "mon", "tue", "thu", "fri",
+        "sat", "sun", "am", "pm"
     ]
 
     if any(word in msg for word in booking_words):
@@ -110,21 +90,30 @@ async def reply(request: Request):
             "message": "Booked successfully. Confirmation shared."
         }
 
-    # positive intent
-    positive_words = [
-        "yes", "sure", "ok", "okay",
-        "interested", "launch", "do it",
-        "start", "proceed"
+    # STOP / terminal (word-based)
+    terminal_words = [
+        "stop", "unsubscribe",
+        "not interested",
+        "leave me"
     ]
 
-    if any(word in msg for word in positive_words):
+    if any(word in msg for word in terminal_words) or msg == "no":
+        return {
+            "action": "end",
+            "message": "Understood. Conversation closed."
+        }
+
+    # positive
+    if any(word in msg for word in [
+        "yes", "sure", "ok", "okay",
+        "launch", "start", "do it"
+    ]):
         store.remember_reply(merchant_id, msg)
         return {
             "action": "launch",
             "message": "Great. Launching this now."
         }
 
-    # ask once
     store.remember_reply(merchant_id, msg)
 
     return {

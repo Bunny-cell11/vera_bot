@@ -1,57 +1,23 @@
-   data.get("customer")
-    )
+class ContextStore:
+    def __init__(self):
+        self.merchants = {}
+        self.versions = {}
+        self.history = {}
 
+    def save(self, scope, context_id, payload, version=1):
+        key = f"{scope}:{context_id}"
 
-@app.post("/v1/reply")
-async def reply(request: Request):
-    data = await request.json()
+        if version >= self.versions.get(key, 0):
+            self.versions[key] = version
 
-    merchant_id = data.get("merchant_id", "unknown")
-    msg = data.get("message", "").lower().strip()
+            if scope == "merchant":
+                self.merchants[context_id] = payload
 
-    last = store.get_last_reply(merchant_id)
+    def get_merchant(self, merchant_id):
+        return self.merchants.get(merchant_id, {})
 
-    # STOP / terminal
-    if any(x in msg for x in [
-        "stop", "no", "not interested",
-        "unsubscribe", "leave me", "never"
-    ]):
-        return {"action": "end", "message": "Conversation ended."}
+    def remember_reply(self, merchant_id, msg):
+        self.history[merchant_id] = msg
 
-    # duplicate loop prevention
-    if msg == last:
-        return {"action": "end", "message": "Closing repeated thread."}
-
-    # booking detection
-    if any(x in msg for x in [
-        "book", "schedule", "appointment",
-        "wed", "mon", "tue", "thu", "fri",
-        "am", "pm", ":"
-    ]):
-        store.remember_reply(merchant_id, msg)
-
-        slot = re.findall(r'(\d.*)', msg)
-        slot_text = slot[0] if slot else msg
-
-        return {
-            "action": "book",
-            "message": f"Booked successfully for {slot_text}"
-        }
-
-    # positive intent
-    if any(x in msg for x in [
-        "yes", "sure", "ok", "okay",
-        "launch", "start", "do it"
-    ]):
-        store.remember_reply(merchant_id, msg)
-        return {
-            "action": "launch",
-            "message": "Great. Launching this now."
-        }
-
-    store.remember_reply(merchant_id, msg)
-
-    return {
-        "action": "ask",
-        "message": "Would you like me to launch this now?"
-    
+    def get_last_reply(self, merchant_id):
+        return self.history.get(merchant_id, "")

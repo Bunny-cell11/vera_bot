@@ -72,11 +72,11 @@ async def reply(request: Request):
 
     last = store.get_last_reply(merchant_id)
 
-    # prevent duplicate loops
+    # duplicate prevention
     if msg == last:
         return {"action": "end", "message": "Closing repeated thread."}
 
-    # BOOKING FIRST (higher priority)
+    # BOOKING FIRST
     booking_words = [
         "book", "schedule", "appointment",
         "wed", "mon", "tue", "thu", "fri",
@@ -90,14 +90,13 @@ async def reply(request: Request):
             "message": "Booked successfully. Confirmation shared."
         }
 
-    # STOP / terminal (word-based)
-    terminal_words = [
-        "stop", "unsubscribe",
+    # STOP only exact no
+    if msg == "no" or any(word in msg for word in [
+        "stop",
+        "unsubscribe",
         "not interested",
         "leave me"
-    ]
-
-    if any(word in msg for word in terminal_words) or msg == "no":
+    ]):
         return {
             "action": "end",
             "message": "Understood. Conversation closed."
